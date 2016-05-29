@@ -1,24 +1,26 @@
 package poweradapter
 
 import (
-	"fmt"
+	"bytes"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/urlfetch"
 )
 
 const (
-	Domain string = "example.org"
+	Domain                 string = "example.org"
+	MeasurementProtocolUrl string = "https://www.google-analytics.com/collect"
 )
 
 func init() {
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*")
-	//r.GET("/test-create", testCreateLink)
-	//r.GET("/test-load/:base-36-id", testLoadLink)
 	r.GET("/r/:base-36-id", redirect)
 	r.GET("/new", new)
 	r.POST("/create", create)
@@ -43,7 +45,16 @@ func redirect(c *gin.Context) {
 		return
 	}
 
-	// TODO: Send payload to Google Analytics
+	client := urlfetch.Client(ctx)
+	var resp *http.Response
+	resp, err = client.Post(MeasurementProtocolUrl, "", bytes.NewBufferString(link.Payload))
+	if err != nil {
+		log.Errorf(ctx, "%s", err)
+	}
+	log.Infof(ctx, "%s", resp.Status)
+	body, _ := ioutil.ReadAll(resp.Body)
+	log.Infof(ctx, "%s", string(body))
+
 	c.Redirect(301, link.Url)
 }
 
@@ -80,52 +91,4 @@ func makeLink(c *gin.Context) (Link, error) {
 	}
 	// TODO: Parameter checking on Link so that a HitType contains all its required parameters
 	return link, nil
-}
-
-func testLoadLink(c *gin.Context) {
-	ctx := appengine.NewContext(c.Request)
-
-	strId := c.Param("base-36-id")
-	id, _ := strconv.ParseInt(strId, 36, 64)
-	k := datastore.NewKey(ctx, "link", "", id, nil)
-
-	var l Link
-	if err := datastore.Get(ctx, k, &l); err != nil {
-		c.String(500, k.Encode())
-		c.String(500, err.Error())
-	}
-	c.String(200, l.Payload)
-	c.JSON(200, gin.H{
-		"l.TrackingId": l.TrackingId,
-		"l.HitType":    l.HitType,
-		"l.Payload":    l.Payload,
-	})
-}
-
-func testCreateLink(c *gin.Context) {
-	ctx := appengine.NewContext(c.Request)
-
-	l := &Link{
-		Url:           "http://matthewdu.com",
-		TrackingId:    "TestTrackingId",
-		HitType:       "event",
-		EventCategory: "TestCat",
-		EventAction:   "TestAct",
-		EventLabel:    "TestLabel",
-		EventValue:    4,
-	}
-
-	k := datastore.NewIncompleteKey(ctx, "link", nil)
-	key, err := datastore.Put(ctx, k, l)
-	if err != nil {
-		panic(err)
-		fmt.Println(err)
-	}
-	c.JSON(200, gin.H{
-		"key.Encode()":        key.Encode(),
-		"key.IntID()":         key.IntID(),
-		"base 36 key.IntID()": strconv.FormatInt(key.IntID(), 36),
-	})
-
-	//fmt.Println(k.Encode())
 }

@@ -3,46 +3,123 @@ package poweradapter
 import (
     "fmt"
     "net/http"
+    "strconv"
 
-    "appengine"
-    "appengine/datastore"
+    "google.golang.org/appengine"
+    "google.golang.org/appengine/datastore"
     "github.com/gin-gonic/gin"
+)
+
+const (
+    Domain string = "example.org"
 )
 
 func init() {
     r := gin.Default()
-    r.GET("/ping", func(c *gin.Context) {
-	c.JSON(200, gin.H{
-	    "message": "pong",
-	})
-    })
-    r.GET("/test-create", testCreateLink)
+    //r.GET("/test-create", testCreateLink)
+    //r.GET("/test-load/:base-36-id", testLoadLink)
+    r.GET("/:base-36-id", show)
+    r.POST("/create", create)
 
     http.Handle("/", r)
+}
+
+func show(c *gin.Context) {
+    ctx := appengine.NewContext(c.Request)
+
+    strId := c.Param("base-36-id")
+    id, err := strconv.ParseInt(strId, 36, 64)
+    if err != nil {
+	c.String(400, err.Error())
+	return
+    }
+    key := datastore.NewKey(ctx, "link", "", id, nil)
+
+    var link Link
+    if err = datastore.Get(ctx, key, &link); err != nil {
+	c.String(400, err.Error())
+	return
+    }
+
+    // TODO: Send payload to Google Analytics
+    c.Redirect(301, link.Url)
+}
+
+func create(c *gin.Context) {
+    ctx := appengine.NewContext(c.Request)
+
+    link, err := makeLink(c)
+    if err != nil {
+	c.String(400, err.Error())
+	return
+    }
+    
+    k := datastore.NewIncompleteKey(ctx, "link", nil)
+
+    var key *datastore.Key
+    key, err = datastore.Put(ctx, k, &link)
+    if err != nil {
+	c.String(400, err.Error())
+	return
+    }
+    c.JSON(201, gin.H{
+	"base 36 key.IntID()": Domain + "/" + strconv.FormatInt(key.IntID(), 36),
+    })
+}
+
+func makeLink(c *gin.Context) (Link, error) {
+    var link Link
+    if err := c.Bind(&link); err != nil {
+	return link, err
+    }
+    // TODO: Parameter checking on Link so that a HitType contains all its required parameters
+    return link, nil
+}
+
+func testLoadLink(c *gin.Context) {
+    ctx := appengine.NewContext(c.Request)
+
+    strId := c.Param("base-36-id")
+    id, _ := strconv.ParseInt(strId, 36, 64)
+    k := datastore.NewKey(ctx, "link", "", id, nil)
+
+    var l Link
+    if err := datastore.Get(ctx, k, &l); err != nil {
+	c.String(500, k.Encode())
+	c.String(500, err.Error())
+    }
+    c.String(200, l.Payload)
+    c.JSON(200, gin.H{
+	"l.TrackingId": l.TrackingId,
+	"l.HitType": l.HitType,
+	"l.Payload": l.Payload,
+    })
 }
 
 func testCreateLink(c *gin.Context) {
     ctx := appengine.NewContext(c.Request)
     
-    eventHit := Event{
-        EventCategory: "TestCat",
-        EventAction: "TestAct",
-        EventValue: 4,
-    }
-
     l := &Link{
         Url: "http://matthewdu.com",
         TrackingId: "TestTrackingId",
-        Hit: eventHit,
+	HitType: "event",
+        EventCategory: "TestCat",
+        EventAction: "TestAct",
+	EventLabel: "TestLabel",
+        EventValue: 4,
     }
 
-    fmt.Println(l.PayloadString());
-
     k := datastore.NewIncompleteKey(ctx, "link", nil)
-    _, err := datastore.Put(ctx, k, l)
+    key, err := datastore.Put(ctx, k, l)
     if err != nil {
 	panic(err)
         fmt.Println(err)
     }
+    c.JSON(200, gin.H{
+	"key.Encode()": key.Encode(),
+	"key.IntID()": key.IntID(),
+	"base 36 key.IntID()": strconv.FormatInt(key.IntID(), 36),
+    })
+
     //fmt.Println(k.Encode())
 }

@@ -1,28 +1,41 @@
 package poweradapter
 
 import (
+	"base62"
 	"bytes"
-	"io/ioutil"
+	//	"io/ioutil"
 	"net/http"
-	"strconv"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/delay"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/taskqueue"
 	"google.golang.org/appengine/urlfetch"
 )
 
 const (
-	Domain                 string = "example.org"
-	MeasurementProtocolUrl string = "https://www.google-analytics.com/collect"
+	domain string = "example.org"
+	gaUrl  string = "https://www.google-analytics.com/collect"
 )
+
+var gaPost = delay.Func("gaPost", func(ctx context.Context, m url.Values, base62Id string, id int64) {
+	client := urlfetch.Client(ctx)
+	resp, err := client.Post(gaUrl, "", bytes.NewBufferString(m.Encode()))
+	if err != nil {
+		log.Errorf(ctx, "/r/%s: _id=%d %s", base62Id, id, err)
+	}
+	log.Infof(ctx, "/r/%s: _id=%d _payload=%s _status=%s", base62Id, id, m.Encode(), resp.Status)
+	//s, _ := ioutil.ReadAll(resp.Body)
+	//log.Infof(ctx, "%s", string(s))
+})
 
 func init() {
 	r := gin.Default()
-	r.LoadHTMLGlob("templates/*")
-	r.GET("/r/:base-36-id", redirect)
-	r.GET("/new", new)
+	r.GET("/r/:base62-id", redirect)
 	r.POST("/create", create)
 
 	http.Handle("/", r)
@@ -31,35 +44,32 @@ func init() {
 func redirect(c *gin.Context) {
 	ctx := appengine.NewContext(c.Request)
 
-	strId := c.Param("base-36-id")
-	id, err := strconv.ParseInt(strId, 36, 64)
+	strId := c.Param("base62-id")
+	id, err := base62.Decode(strId)
 	if err != nil {
-		c.String(400, err.Error())
+		log.Errorf(ctx, "/r/%s: _id=%d %s", strId, id, err)
+		c.Status(400)
 		return
 	}
 	key := datastore.NewKey(ctx, "link", "", id, nil)
 
 	var link Link
 	if err = datastore.Get(ctx, key, &link); err != nil {
-		c.String(400, err.Error())
+		log.Errorf(ctx, "/r/%s: _id=%d %s", strId, id, err)
+		c.Status(500)
 		return
 	}
 
-	client := urlfetch.Client(ctx)
-	var resp *http.Response
-	resp, err = client.Post(MeasurementProtocolUrl, "", bytes.NewBufferString(link.Payload))
-	if err != nil {
-		log.Errorf(ctx, "%s", err)
-	}
-	log.Infof(ctx, "%s", resp.Status)
-	body, _ := ioutil.ReadAll(resp.Body)
-	log.Infof(ctx, "%s", string(body))
+	payloadValues, _ := url.ParseQuery(link.Payload)
+	payloadValues.Set("ua", c.Request.UserAgent())
+	task, _ := gaPost.Task(payloadValues, strId, id)
+	defer func() {
+		if _, err = taskqueue.Add(ctx, task, ""); err != nil {
+			log.Errorf(ctx, "/r/%s: _id=%d %s", strId, id, err)
+		}
+	}()
 
 	c.Redirect(301, link.Url)
-}
-
-func new(c *gin.Context) {
-	c.HTML(200, "new.tmpl", nil)
 }
 
 func create(c *gin.Context) {
@@ -67,7 +77,8 @@ func create(c *gin.Context) {
 
 	link, err := makeLink(c)
 	if err != nil {
-		c.String(400, err.Error())
+		log.Errorf(ctx, "/create: %s", err)
+		c.Status(400)
 		return
 	}
 
@@ -76,19 +87,13 @@ func create(c *gin.Context) {
 	var key *datastore.Key
 	key, err = datastore.Put(ctx, k, &link)
 	if err != nil {
-		c.String(400, err.Error())
+		log.Errorf(ctx, "/create: %s", err)
+		c.Status(500)
 		return
 	}
+	strId := base62.Encode(key.IntID())
+	log.Infof(ctx, "/create: _id=%d Created /r/%s", key.IntID(), strId)
 	c.JSON(201, gin.H{
-		"base 36 key.IntID()": Domain + "/" + strconv.FormatInt(key.IntID(), 36),
+		"link": "/r/" + base62.Encode(key.IntID()),
 	})
-}
-
-func makeLink(c *gin.Context) (Link, error) {
-	var link Link
-	if err := c.Bind(&link); err != nil {
-		return link, err
-	}
-	// TODO: Parameter checking on Link so that a HitType contains all its required parameters
-	return link, nil
 }

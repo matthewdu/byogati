@@ -1,0 +1,89 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="author" content="Matthew Du">
+
+    <link rel="icon" type="image/png" href="/assets/favicon.ico"/>
+    <link rel="stylesheet" href="/assets/main.css">
+
+    <script>
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', {
+        trackingId: 'UA-61663331-1',
+        cookieDomain: 'auto',
+        siteSpeedSampleRate: 100,
+        transport: 'beacon',
+      });
+
+    </script>
+  </head>
+  <body>
+    <h1>abrv</h1>
+    <form id="linkForm">
+      <label for="url">Url(with http/https)</label>
+      <input type="url" id="url" name="url"/>
+      <label for="payload">Hit payload</label>
+      <textarea id="payload" name="payload"></textarea>
+      <div>
+        <button class="btn" id="validate-btn" type="button" onclick="validate()">Validate</button>
+        <button class="btn" id="create-btn" type="button" onclick="create()" style="display: none;">Create</button>
+      </div>
+    </form>
+  </body>
+  <script type="text/javascript">
+    window.addEventListener('input', function (e) {
+      var validateBtn = document.getElementById("validate-btn");
+      var createBtn = document.getElementById("create-btn");
+      createBtn.setAttribute("style", "display: none;");
+      validateBtn.removeAttribute("style");
+    }, false);
+
+    function validate() {
+      var payload = document.getElementById("payload").value;
+
+      var xhr = new XMLHttpRequest();
+      var response = {};
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == XMLHttpRequest.DONE) {
+          response = JSON.parse(xhr.responseText);
+          
+          var validateBtn = document.getElementById("validate-btn");
+          var createBtn = document.getElementById("create-btn");
+          if(response.hitParsingResult[0].valid) {
+            validateBtn.setAttribute("style", "display: none;");
+            createBtn.removeAttribute("style");
+          }
+        }
+      }
+
+      xhr.open("POST", "https://google-analytics.com/debug/collect");
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+      xhr.send(payload);
+    }
+
+    function create() {
+      var linkForm = document.getElementById("linkForm");
+
+      var xhr = new XMLHttpRequest();
+      var response = {};
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == XMLHttpRequest.DONE) {
+          response = JSON.parse(xhr.responseText);
+          console.log(response);
+        }
+      }
+
+      var formData  = new FormData(linkForm);
+
+      xhr.open("POST", "/create");
+      xhr.send(formData)
+    }
+  </script>
+</html>

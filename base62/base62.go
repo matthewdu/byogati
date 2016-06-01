@@ -1,10 +1,7 @@
-// https://github.com/pilu/go-base62
 package base62
 
 import (
-	"bytes"
 	"errors"
-	"math"
 )
 
 // characters used for conversion
@@ -36,22 +33,24 @@ func Encode(number int64) string {
 
 // converts base62 token to int
 func Decode(token string) (int64, error) {
-	var number int64 = 0
-	idx := 0.0
-	chars := []byte(alphabet)
+	var n uint64 = 0
 
-	charsLength := float64(len(chars))
-	tokenLength := float64(len(token))
-
-	for _, c := range []byte(token) {
-		power := tokenLength - (idx + 1)
-		index := bytes.IndexByte(chars, c)
-		if index == -1 {
+	for i := 0; i < len(token); i++ {
+		var v byte
+		d := token[i]
+		switch {
+		case '0' <= d && d <= '9':
+			v = d - '0'
+		case 'a' <= d && d <= 'z':
+			v = d - 'a' + 10
+		case 'A' <= d && d <= 'Z':
+			v = d - 'A' + 36
+		default:
 			return 0, errors.New("Invalid token string to decode")
 		}
-		number += int64(index) * int64(math.Pow(charsLength, power))
-		idx++
+		n *= 62
+		n += uint64(v)
 	}
 
-	return number, nil
+	return int64(n), nil
 }

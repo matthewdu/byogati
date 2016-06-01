@@ -61,7 +61,7 @@ func redirect(c *gin.Context) {
 	}
 
 	payloadValues, _ := url.ParseQuery(link.Payload)
-	payloadValues.Set("ua", c.Request.UserAgent())
+	enrichPayload(&payloadValues, c)
 	task, _ := gaPost.Task(payloadValues, strId, id)
 	defer func() {
 		if _, err = taskqueue.Add(ctx, task, ""); err != nil {
@@ -96,4 +96,10 @@ func create(c *gin.Context) {
 	c.JSON(201, gin.H{
 		"link": "/r/" + base62.Encode(key.IntID()),
 	})
+}
+
+func enrichPayload(m *url.Values, c *gin.Context) {
+	m.Set("ua", c.Request.UserAgent())
+	m.Set("uip", c.ClientIP())
+	m.Set("ds", "abrv")
 }

@@ -1,13 +1,13 @@
-package poweradapter
+package byogati
 
 import (
-	"base62"
 	"bytes"
-	//	"io/ioutil"
 	"net/http"
 	"net/url"
 
 	"github.com/gin-gonic/gin"
+	"github.com/matthewdu/base62"
+	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -18,24 +18,28 @@ import (
 )
 
 const (
-	domain string = "example.org"
-	gaUrl  string = "https://www.google-analytics.com/collect"
+	domain     string = "abrv.in"
+	gaUrl      string = "https://www.google-analytics.com/collect"
+	gaDebugUrl string = "https://www.google-analytics.com/debug/collect"
 )
 
-var gaPost = delay.Func("gaPost", func(ctx context.Context, m url.Values, base62Id string, id int64) {
+var gaPost = delay.Func("gaPost", func(ctx context.Context, m url.Values, path string) {
 	client := urlfetch.Client(ctx)
 	resp, err := client.Post(gaUrl, "", bytes.NewBufferString(m.Encode()))
 	if err != nil {
-		log.Errorf(ctx, "/r/%s: _id=%d %s", base62Id, id, err)
+		log.Errorf(ctx, "payload failed to send: _%s", err)
 	}
-	log.Infof(ctx, "/r/%s: _id=%d _payload=%s _status=%s", base62Id, id, m.Encode(), resp.Status)
+	log.Infof(ctx, "payload sent: _path=%s _payload=%s _status=%s", path, m.Encode(), resp.Status)
 	//s, _ := ioutil.ReadAll(resp.Body)
 	//log.Infof(ctx, "%s", string(s))
 })
 
 func init() {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	r.GET("/r/:base62-id", redirect)
+	r.GET("/s/:base62-id", redirect)
+	r.GET("/debug/:base62-id", debug)
+	r.GET("/l/:params", redirectWithParams)
 	r.POST("/create", create)
 
 	http.Handle("/", r)
@@ -44,32 +48,56 @@ func init() {
 func redirect(c *gin.Context) {
 	ctx := appengine.NewContext(c.Request)
 
-	strId := c.Param("base62-id")
-	id, err := base62.Decode(strId)
-	if err != nil {
-		log.Errorf(ctx, "/r/%s: _id=%d %s", strId, id, err)
-		c.Status(400)
-		return
-	}
-	key := datastore.NewKey(ctx, "link", "", id, nil)
-
+	base62Id := c.Param("base62-id")
 	var link Link
-	if err = datastore.Get(ctx, key, &link); err != nil {
-		log.Errorf(ctx, "/r/%s: _id=%d %s", strId, id, err)
-		c.Status(500)
+	if err := getLinkFromDatastore(ctx, base62Id, &link); err != nil {
+		c.Status(400)
+		log.Infof(ctx, "/s/%s: %s", base62Id, err)
 		return
 	}
 
-	payloadValues, _ := url.ParseQuery(link.Payload)
-	enrichPayload(&payloadValues, c)
-	task, _ := gaPost.Task(payloadValues, strId, id)
 	defer func() {
-		if _, err = taskqueue.Add(ctx, task, ""); err != nil {
-			log.Errorf(ctx, "/r/%s: _id=%d %s", strId, id, err)
+		payloadValues, _ := url.ParseQuery(link.Payload)
+		enrichPayload(&payloadValues, c)
+		task, _ := gaPost.Task(payloadValues, c.Request.URL.Path)
+		if _, err := taskqueue.Add(ctx, task, ""); err != nil {
+			log.Errorf(ctx, "/s/%s: %s", base62Id, err)
 		}
 	}()
 
 	c.Redirect(301, link.Url)
+}
+
+func debug(c *gin.Context) {
+	ctx := appengine.NewContext(c.Request)
+
+	base62Id := c.Param("base62-id")
+	var link Link
+	getLinkFromDatastore(ctx, base62Id, &link)
+
+	c.JSON(200, gin.H{
+		"url":     link.Url,
+		"payload": link.Payload,
+	})
+}
+
+func redirectWithParams(c *gin.Context) {
+	ctx := appengine.NewContext(c.Request)
+
+	params := c.Param("params")
+
+	payloadValues, _ := url.ParseQuery(params)
+	url, _ := url.QueryUnescape(payloadValues.Get("url"))
+	defer func() {
+		payloadValues.Del("url")
+		enrichPayload(&payloadValues, c)
+		task, _ := gaPost.Task(payloadValues, c.Request.URL.Path)
+		if _, err := taskqueue.Add(ctx, task, ""); err != nil {
+			log.Errorf(ctx, "/l/%s: %s", params, err)
+		}
+	}()
+
+	c.Redirect(301, url)
 }
 
 func create(c *gin.Context) {
@@ -77,7 +105,13 @@ func create(c *gin.Context) {
 
 	link, err := makeLink(c)
 	if err != nil {
-		log.Errorf(ctx, "/create: %s", err)
+		log.Infof(ctx, "/create: %s", err)
+		c.Status(400)
+		return
+	}
+
+	parsedUrl, _ := url.Parse(link.Url)
+	if !parsedUrl.IsAbs() || parsedUrl.Host == domain {
 		c.Status(400)
 		return
 	}
@@ -91,10 +125,11 @@ func create(c *gin.Context) {
 		c.Status(500)
 		return
 	}
-	strId := base62.Encode(key.IntID())
-	log.Infof(ctx, "/create: _id=%d Created /r/%s", key.IntID(), strId)
+	base62Id := base62.Encode(uint64(key.IntID()))
+	log.Infof(ctx, "/create: Created _id=%d /s/%s", key.IntID(), base62Id)
 	c.JSON(201, gin.H{
-		"link": "/r/" + base62.Encode(key.IntID()),
+		"shortLink": "/s/" + base62Id,
+		//"longLink":  "/l/url=" + url.QueryEscape(link.Url) + "&" + link.Payload,
 	})
 }
 
@@ -102,4 +137,5 @@ func enrichPayload(m *url.Values, c *gin.Context) {
 	m.Set("ua", c.Request.UserAgent())
 	m.Set("uip", c.ClientIP())
 	m.Set("ds", "abrv")
+	m.Set("cid", uuid.New())
 }

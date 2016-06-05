@@ -4,8 +4,6 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <meta name="author" content="Matthew Du">
-
     <link rel="icon" type="image/png" href="/assets/favicon.ico"/>
     <link rel="stylesheet" href="/assets/main.css">
 
@@ -15,27 +13,56 @@
       m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
       })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
 
-      ga('create', {
-        trackingId: 'UA-61663331-1',
-        cookieDomain: 'auto',
-        siteSpeedSampleRate: 100,
-        transport: 'beacon',
-      });
+    ga('create', {
+      trackingId: 'UA-61663331-2',
+      cookieDomain: 'auto',
+      siteSpeedSampleRate: 100,
+      transport: 'beacon',
+    });
+    ga('send', 'pageview');
 
     </script>
   </head>
   <body>
-    <h1>abrv</h1>
-    <form id="linkForm">
-      <label for="url">Url(with http/https)</label>
-      <input type="url" id="url" name="url"/>
-      <label for="payload">Hit payload</label>
-      <textarea id="payload" name="payload"></textarea>
-      <div>
+    <div id="header" style="margin: 0px 0px 20px 120px;">
+      <h1 style="margin: 0;">abrv</h1>
+      <span style="font-size: 12px; color: #444;">bring your own google analytics tracking id</span>
+    </div>
+    <form id="link-form">
+      <div class="form-group">
+        <div class="form-label">
+          <label for="url">URL</label>
+          <span class="form-label-extra">with http/https</span>
+        </div>
+        <div class="form-field">
+          <input type="url" id="url" name="url"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="form-label">
+          <label for="payload">Hit payload</label>
+          <span class="form-label-extra">construct with <a href="https://ga-dev-tools.appspot.com/hit-builder/">hit builder</a></span>
+        </div>
+        <div class="form-field">
+          <textarea id="payload" name="payload"></textarea>
+        </div>
+      </div>
+      <div style="margin-left: 120px;">
         <button class="btn" id="validate-btn" type="button" onclick="validate()">Validate</button>
         <button class="btn" id="create-btn" type="button" onclick="create()" style="display: none;">Create</button>
       </div>
     </form>
+    <div id="short-link-div" style="display: none;">
+      <code id="short-link">
+      </code>
+    </div>
+    <div style="margin-left: 120px;">
+      <h3>what is this?</h3>
+      <p>abrv is a url shortener + google analytics hit producer.</p>
+
+      <h3>how does it work?</h3>
+      <p>everytime an user navigates to the shortened link, the hit payload is sent to google analytics.</p>
+    </div>
   </body>
   <script type="text/javascript">
     window.addEventListener('input', function (e) {
@@ -69,7 +96,7 @@
     }
 
     function create() {
-      var linkForm = document.getElementById("linkForm");
+      var linkForm = document.getElementById("link-form");
 
       var xhr = new XMLHttpRequest();
       var response = {};
@@ -77,6 +104,10 @@
         if (xhr.readyState == XMLHttpRequest.DONE) {
           response = JSON.parse(xhr.responseText);
           console.log(response);
+          var shortLink = document.getElementById("short-link");
+          shortLink.textContent = location.origin + response.shortLink;
+          var shortLinkDiv = document.getElementById("short-link-div");
+          shortLinkDiv.removeAttribute("style");
         }
       }
 

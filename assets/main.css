@@ -1,7 +1,20 @@
 body {
-  width: 560px;
+  width: 720px;
   margin: 0 auto;
   font-family: "Helvetica";
+}
+
+a {
+  text-decoration: none;
+  color: #337AB7;
+}
+
+h3 {
+  margin: 0;
+}
+
+p {
+  margin: 0px 0px 16px 0px;
 }
 
 #url {
@@ -11,6 +24,38 @@ body {
 #payload {
   width: 100%;
   resize: vertical;
+}
+
+#short-link-div {
+  padding: 5px;
+  border: 1px solid #ccc;
+  background: #F5F5F5;
+  margin: 20px 120px;
+}
+
+.form-group {
+  font-size: 19px;
+  display: table;
+  width: 100%;
+  margin-bottom: 8px;
+}
+.form-label {
+  float: left;
+  width: 110px;
+  text-align: right;
+  padding-right: 10px;
+  display: inline-block;
+}
+.form-label-extra {
+  font-size: 9px;
+  color: #444;
+  display:block;
+}
+.form-field {
+  float: right;
+  width: 480px;
+  margin-right: 120px;
+  display: inline-block;
 }
 
 .btn {

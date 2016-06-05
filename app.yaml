@@ -1,6 +1,7 @@
-application: poweradapter
+application: byogati
 runtime: go
 api_version: go1
+version: 1
 
 handlers:
 - url: /

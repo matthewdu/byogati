@@ -106,13 +106,13 @@ func create(c *gin.Context) {
 	link, err := makeLink(c)
 	if err != nil {
 		log.Infof(ctx, "/create: %s", err)
-		c.Status(400)
+		c.String(400, err.Error())
 		return
 	}
 
 	parsedUrl, _ := url.Parse(link.Url)
 	if !parsedUrl.IsAbs() || parsedUrl.Host == domain {
-		c.Status(400)
+		c.String(400, "Invalid URL")
 		return
 	}
 
@@ -122,7 +122,7 @@ func create(c *gin.Context) {
 	key, err = datastore.Put(ctx, k, &link)
 	if err != nil {
 		log.Errorf(ctx, "/create: %s", err)
-		c.Status(500)
+		c.String(500, "Server error, try again later")
 		return
 	}
 	base62Id := base62.Encode(uint64(key.IntID()))

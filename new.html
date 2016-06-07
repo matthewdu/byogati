@@ -56,7 +56,7 @@
       <code id="short-link">
       </code>
     </div>
-    <div style="margin-left: 120px;">
+    <div style="margin-left: 120px; width: 480px;">
       <h3>what is this?</h3>
       <p>abrv is a url shortener + google analytics hit producer.</p>
 
@@ -65,48 +65,56 @@
     </div>
   </body>
   <script type="text/javascript">
+    var payload = document.getElementById("payload");
+    var validateBtn = document.getElementById("validate-btn");
+    var createBtn = document.getElementById("create-btn");
+
     window.addEventListener('input', function (e) {
-      var validateBtn = document.getElementById("validate-btn");
-      var createBtn = document.getElementById("create-btn");
       createBtn.setAttribute("style", "display: none;");
+      createBtn.removeAttribute("disabled");
       validateBtn.removeAttribute("style");
+      payload.removeAttribute("style");
     }, false);
 
     function validate() {
-      var payload = document.getElementById("payload").value;
-
       var xhr = new XMLHttpRequest();
       var response = {};
       xhr.onreadystatechange = function() {
         if (xhr.readyState == XMLHttpRequest.DONE) {
           response = JSON.parse(xhr.responseText);
           
-          var validateBtn = document.getElementById("validate-btn");
-          var createBtn = document.getElementById("create-btn");
           if(response.hitParsingResult[0].valid) {
             validateBtn.setAttribute("style", "display: none;");
             createBtn.removeAttribute("style");
+          } else {
+            payload.setAttribute("style", "box-shadow: 0 0 5px red;")
           }
         }
       }
 
       xhr.open("POST", "https://google-analytics.com/debug/collect");
       xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-      xhr.send(payload);
+      xhr.send(payload.value);
     }
 
     function create() {
       var linkForm = document.getElementById("link-form");
+      createBtn.setAttribute("disabled", "disabled");
 
       var xhr = new XMLHttpRequest();
       var response = {};
       xhr.onreadystatechange = function() {
         if (xhr.readyState == XMLHttpRequest.DONE) {
-          response = JSON.parse(xhr.responseText);
-          console.log(response);
           var shortLink = document.getElementById("short-link");
-          shortLink.textContent = location.origin + response.shortLink;
           var shortLinkDiv = document.getElementById("short-link-div");
+          if (xhr.status >= 200 && xhr.status <= 299) {
+            response = JSON.parse(xhr.responseText);
+            shortLink.textContent = location.origin + response.shortLink;
+            console.log(response);
+          } else {
+            shortLink.textContent = xhr.responseText;
+            createBtn.removeAttribute("disabled");
+          }
           shortLinkDiv.removeAttribute("style");
         }
       }

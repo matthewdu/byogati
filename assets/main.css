@@ -9,7 +9,7 @@ a {
   color: #337AB7;
 }
 
-h3 {
+h3, h4 {
   margin: 0;
 }
 
@@ -31,6 +31,16 @@ p {
   border: 1px solid #ccc;
   background: #F5F5F5;
   margin: 20px 120px;
+}
+
+.link {
+  text-decoration: none;
+  color: #337AB7;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: #23527c;
 }
 
 .form-group {

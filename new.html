@@ -22,6 +22,7 @@
     ga('send', 'pageview');
 
     </script>
+    <script src='https://www.google.com/recaptcha/api.js' async defer></script>
   </head>
   <body>
     <div id="header" style="margin: 0px 0px 20px 120px;">
@@ -47,6 +48,7 @@
           <textarea id="payload" name="payload"></textarea>
         </div>
       </div>
+      <div style="margin-left: 120px;" class="form-group g-recaptcha" data-sitekey="6LdAUCUTAAAAACAXJjpHd_pGOYpC5niVKvbbmeeo"></div>
       <div style="margin-left: 120px;">
         <button class="btn" id="validate-btn" type="button" onclick="validate()">Validate</button>
         <button class="btn" id="create-btn" type="button" onclick="create()" style="display: none;">Create</button>
@@ -129,7 +131,8 @@
             shortLink.textContent = xhr.responseText;
             createBtn.removeAttribute("disabled");
           }
-          shortLinkDiv.removeAttribute("style");
+          shortLinkDiv.removeAttribute("style"); // unhide div
+          grecaptcha.reset();
         }
       }
 

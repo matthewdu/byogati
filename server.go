@@ -1,7 +1,8 @@
 package byogati
 
 import (
-	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -18,14 +19,16 @@ import (
 )
 
 const (
-	domain     string = "abrv.in"
-	gaUrl      string = "https://www.google-analytics.com/collect"
-	gaDebugUrl string = "https://www.google-analytics.com/debug/collect"
+	domain          string = "abrv.in"
+	gaUrl           string = "https://www.google-analytics.com/collect"
+	gaDebugUrl      string = "https://www.google-analytics.com/debug/collect"
+	reCaptchaUrl    string = "https://www.google.com/recaptcha/api/siteverify"
+	reCaptchaSecret string = "6LdAUCUTAAAAAG16sFm3arMt2MQwEmaNnUH7UJ3Q"
 )
 
 var gaPost = delay.Func("gaPost", func(ctx context.Context, m url.Values, path string) {
 	client := urlfetch.Client(ctx)
-	resp, err := client.Post(gaUrl, "", bytes.NewBufferString(m.Encode()))
+	resp, err := client.PostForm(gaUrl, m)
 	if err != nil {
 		log.Errorf(ctx, "payload failed to send: _%s", err)
 	}
@@ -33,6 +36,10 @@ var gaPost = delay.Func("gaPost", func(ctx context.Context, m url.Values, path s
 	//s, _ := ioutil.ReadAll(resp.Body)
 	//log.Infof(ctx, "%s", string(s))
 })
+
+type ReCaptchaResponse struct {
+	Success bool `json:"success"`
+}
 
 func init() {
 	gin.SetMode(gin.ReleaseMode)
@@ -102,6 +109,27 @@ func redirectWithParams(c *gin.Context) {
 
 func create(c *gin.Context) {
 	ctx := appengine.NewContext(c.Request)
+
+	// Verify reCaptcha
+	reCaptchaRequest := url.Values{
+		"secret":   []string{reCaptchaSecret},
+		"response": []string{c.Request.FormValue("g-recaptcha-response")},
+	}
+	client := urlfetch.Client(ctx)
+	resp, err := client.PostForm(reCaptchaUrl, reCaptchaRequest)
+	if err != nil {
+		log.Errorf(ctx, "/create: failed to verify reCaptcha %s", err)
+	}
+	s, _ := ioutil.ReadAll(resp.Body)
+	var reCaptchaResp ReCaptchaResponse
+	if err = json.Unmarshal(s, &reCaptchaResp); err != nil {
+		log.Errorf(ctx, "/create: failed to parse reCaptchaResponse %s", err)
+	}
+	if !reCaptchaResp.Success {
+		log.Infof(ctx, "/create: failed reCaptcha verification")
+		c.String(400, "Failed reCaptcha verification.")
+		return
+	}
 
 	link, err := makeLink(c)
 	if err != nil {

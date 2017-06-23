@@ -23,7 +23,7 @@ const (
 	gaUrl           string = "https://www.google-analytics.com/collect"
 	gaDebugUrl      string = "https://www.google-analytics.com/debug/collect"
 	reCaptchaUrl    string = "https://www.google.com/recaptcha/api/siteverify"
-	reCaptchaSecret string = "6LdAUCUTAAAAAG16sFm3arMt2MQwEmaNnUH7UJ3Q"
+	reCaptchaSecret string = "6LdAUCUTAAAAAG16sFm3arMt2MQwEmaNnUH7UJ3Q" // Deactivated
 )
 
 var gaPost = delay.Func("gaPost", func(ctx context.Context, m url.Values, path string) {
